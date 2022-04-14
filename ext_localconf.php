@@ -113,6 +113,15 @@ $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['scheduler']['tasks']['DirectMailTeam\
     'additionalFields' => 'DirectMailTeam\\DirectMail\\Scheduler\\AnalyzeBounceMailAdditionalFields'
 );
 
+$GLOBALS['TYPO3_CONF_VARS']['LOG']['DirectMailTeam']['DirectMail']['Dmailer']['writerConfiguration'] = [
+    \TYPO3\CMS\Core\Log\LogLevel::INFO => [
+        // add a SyslogWriter
+        \TYPO3\CMS\Core\Log\Writer\FileWriter::class => [
+            // configuration for the writer
+            'logFile' => 'typo3temp/var/logs/dmail.log'
+        ],
+    ],
+];
 
 /**
  * Added CLI

@@ -14,6 +14,8 @@ namespace DirectMailTeam\DirectMail;
  * The TYPO3 project - inspiring people to share!
  */
 
+use Psr\Log\LoggerInterface;
+use TYPO3\CMS\Core\Log\LogManager;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Service\MarkerBasedTemplateService;
 use TYPO3\CMS\Backend\Utility\BackendUtility;
@@ -118,6 +120,18 @@ class Dmailer
     protected $templateService;
 
     /**
+     * The logger instance.
+     *
+     * @var LoggerInterface|null
+     */
+    protected $logger;
+
+    public function __construct()
+    {
+        $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__);
+    }
+
+    /**
      * Preparing the Email. Headers are set in global variables
      *
      * @param array $row Record from the sys_dmail table
@@ -129,6 +143,9 @@ class Dmailer
         global $LANG;
 
         $sys_dmail_uid = $row['uid'];
+
+        $this->logger->info('<-- Direct mail start sys_dmail_uid=' . $sys_dmail_uid . ' -->');
+
         if ($row['flowedFormat']) {
             $this->flowedFormat = 1;
         }
@@ -273,6 +290,8 @@ class Dmailer
         $returnCode = 0;
         $tempRow = array();
 
+        $this->logger->info('E-mail recipient: ' . $recipRow['email']);
+
         // check recipRow for HTML
         foreach ($recipRow as $k => $v) {
             $tempRow[$k] = htmlspecialchars($v);
@@ -307,6 +326,11 @@ class Dmailer
                     $tempContent_HTML = $this->replaceMailMarkers($tempContent_HTML, $recipRow, $additionalMarkers);
                     $this->theParts['html']['content'] = $this->encodeMsg($tempContent_HTML);
                     $returnCode|=1;
+                    $this->logger->info('$this->mailHasContent HTML TRUE: ' . $recipRow['email'] .' $returnCode: ' . $returnCode);
+                }
+                else {
+                    $this->logger->warning('$this->mailHasContent HTML FALSE: no boundaryParts_html? $tableNameChar: ' . $tableNameChar . ' email: ' . $recipRow['email'] .' $returnCode:' . $returnCode);
+                    $this->logger->info('$tempContent_HTML: ' . print_r($tempContent_HTML, true));
                 }
             }
 
@@ -321,6 +345,10 @@ class Dmailer
                     }
                     $this->theParts['plain']['content'] = $this->encodeMsg($tempContent_Plain);
                     $returnCode|=2;
+                    $this->logger->info('$this->mailHasContent PLAIN TRUE: ' . $recipRow['email'] .' $returnCode: ' . $returnCode);
+                }
+                else {
+                    $this->logger->info('$this->mailHasContent PLAIN FALSE: $tableNameChar: ' . $tableNameChar . ' email: ' . $recipRow['email'] .' $returnCode: ' . $returnCode);
                 }
             }
 
@@ -342,12 +370,15 @@ class Dmailer
                         $recipRow['email'],
                     );
                 }
+            } else {
+                $this->logger->warning('E-mail invalid: ' . $recipRow['email']);
             }
-
 
             if ($returnCode && !empty($recipient)) {
                 $this->sendTheMail($recipient, $recipRow);
             }
+        } else {
+            $this->logger->warning('No e-mail for user ' . $recipRow['firstname'] . ' - ' . $recipRow['name']);
         }
         return $returnCode;
     }
@@ -566,8 +597,14 @@ class Dmailer
             // if not, stop the script and report error
             $rC = 0;
             $ok = $this->dmailer_addToMailLog($mid, $tableKey . '_' . $recipRow['uid'], strlen($this->message), GeneralUtility::milliseconds() - $pt, $rC, $recipRow['email']);
+
+            $this->logger->info('Logging start of e-mail processing: ' . $recipRow['email'] . ': is log OK? ' . $ok);
+
             if ($ok) {
                 $logUid = $GLOBALS['TYPO3_DB']->sql_insert_id();
+
+                $this->logger->info('Successfully logged start of e-mail processing: ' . $recipRow['email'] . ': only if OK / logUid=' . $logUid);
+
                 $rC     = $this->dmailer_sendAdvanced($recipRow, $tableKey);
                 $parsetime = GeneralUtility::milliseconds() - $pt;
                 // Update the log with real values
@@ -577,12 +614,18 @@ class Dmailer
                     'parsetime' => $parsetime,
                     'html_sent' => intval($rC)
                 );
+
+                $this->logger->info('Logged e-mail: ' . $recipRow['email'] . ': updating logUid=' . $logUid . ' after sending...');
+
                 $ok = $GLOBALS['TYPO3_DB']->exec_UPDATEquery('sys_dmail_maillog', 'uid=' . $logUid, $updateFields);
                 if (!$ok) {
+                    $this->logger->warning('Unable to update log entry in table sys_dmail_maillog: mid: ' . $mid . ' email: '. $recipRow['email'] . ' / logUid=' . $logUid);
                     if (TYPO3_DLOG) {
                         GeneralUtility::devLog('Unable to update Log-Entry in table sys_dmail_maillog. Table full? Mass-Sending stopped. Delete each entries except the entries of active mailings (mid=' . $mid . ')', 'direct_mail', 3);
                     }
                     die('Unable to update Log-Entry in table sys_dmail_maillog. Table full? Mass-Sending stopped. Delete each entries except the entries of active mailings (mid=' . $mid . ')');
+                } else {
+                    $this->logger->info('Logged e-mail: ' . $recipRow['email'] . ': updated logUid=' . $logUid . '. Mail processed successfully!');
                 }
             } else {
                 // stop the script if dummy log can't be made
@@ -985,7 +1028,7 @@ class Dmailer
         if ($this->organisation) {
             $header->addTextHeader('Organization', $this->organisation);
         }
-        
+
         // Hook to edit or add the mail headers
         if (isset($GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/direct_mail']['res/scripts/class.dmailer.php']['mailHeadersHook'])) {
             $mailHeadersHook =& $GLOBALS['TYPO3_CONF_VARS']['SC_OPTIONS']['ext/direct_mail']['res/scripts/class.dmailer.php']['mailHeadersHook'];
@@ -1019,10 +1062,23 @@ class Dmailer
             $mailer->setEncoder(\Swift_Encoding::get8BitEncoding());
         }
 
+        if (is_array($recipient)) {
+            $email = implode(',', $recipient);
+        } else {
+            $email = $recipient;
+        }
+
+        $this->logger->info('E-mail will be sent to ($email): ' . $email);
+        $this->logger->info('E-mail will be sent to ($mailer->getTo): ' . array_key_first($mailer->getTo()));
+
         // TODO: do we really need the return value?
         $sent = $mailer->send();
         $failed = $mailer->getFailedRecipients();
 
+        $this->logger->info('According to Mailer, mail to ' . $recipRow['email'] . ' was sent to number of recipients: ' . $sent);
+        if ($failed) {
+            $this->logger->warning('According to Mailer, mail to ' . $recipRow['email'] . ' was not sent to: ' . print_r($failed, true));
+        }
         // unset the mailer object
         unset($mailer);
 
