@@ -1413,17 +1413,7 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
                 // it's internal
                 $url = $pathSite . $url;
             }
-
-            $content = GeneralUtility::getURL($url);
-
-            if (preg_match('/\<\s*title\s*\>(.*)\<\s*\/\s*title\s*\>/i', $content, $matches)) {
-                // get the page title
-                $contentTitle = GeneralUtility::fixed_lgd_cs(trim($matches[1]), 50);
-            } else {
-                // file?
-                $file = GeneralUtility::split_fileref($url);
-                $contentTitle = $file['file'];
-            }
+            $contentTitle = $url;
         }
 
         if ($this->params['showContentTitle'] == 1) {
