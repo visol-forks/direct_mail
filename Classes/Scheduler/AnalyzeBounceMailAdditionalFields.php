@@ -66,6 +66,8 @@ class AnalyzeBounceMailAdditionalFields implements AdditionalFieldProviderInterf
             '<option value="imap" ' . ($task->getService == 'imap'? 'selected="selected"' : '') . '>IMAP</option>' .
             '<option value="pop3" ' . ($task->getService == 'pop3'? 'selected="selected"' : '') . '>POP3</option>' .
             '</select>';
+        $keepMailsOnServer = '<input type="checkbox" name="tx_scheduler[bounceKeepMailsOnServer]" ' . ($task && $task->isKeepMailsOnServer(
+            ) ? 'checked' : '') . '/>';
 
         $additionalFields = array();
         $additionalFields['server'] = $this->createAdditionalFields('server', $serverHTML);
@@ -74,6 +76,7 @@ class AnalyzeBounceMailAdditionalFields implements AdditionalFieldProviderInterf
         $additionalFields['password'] = $this->createAdditionalFields('password', $passwordHTML);
         $additionalFields['service'] = $this->createAdditionalFields('service', $serviceHTML);
         $additionalFields['maxProcessed'] = $this->createAdditionalFields('maxProcessed', $maxProcessedHTML);
+        $additionalFields['keepMailsOnServer'] = $this->createAdditionalFields('keepMailsOnServer', $keepMailsOnServer);
 
         return $additionalFields;
     }
@@ -93,6 +96,7 @@ class AnalyzeBounceMailAdditionalFields implements AdditionalFieldProviderInterf
         $task->setPassword($submittedData['bouncePassword']);
         $task->setService($submittedData['bounceService']);
         $task->setMaxProcessed($submittedData['bounceProcessed']);
+        $task->setKeepMailsOnServer($submittedData['bounceKeepMailsOnServer']);
     }
 
     /**
