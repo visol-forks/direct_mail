@@ -590,6 +590,102 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
         }
         $GLOBALS['TYPO3_DB']->sql_free_result($res);
 
+        // unsent
+        $setup = unserialize($row['query_info']);
+        $unsentCounter = 0;
+        $unsentArray = [['E-Mail:', 'mid:', 'rid:', 'html_sent:', 'Timestamp:', 'Parsetime:', 'Empfängerliste:', 'Details:']];
+        $res2 = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
+            'html_sent,email,mid,rid,tstamp,parsetime',
+            'sys_dmail_maillog',
+            'mid=' . $mailingId . ' AND response_type=0 AND html_sent=0',
+            'rid'
+        );
+        while (($row3 = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res2))) {
+            $unsentCounter += 1;
+            if ($row3['html_sent'] == 0) {
+                $keys = array_keys($setup['id_lists']);
+                $listType = $keys[0] ? $keys[0] : 'unbekannt';
+                $details = '';
+
+                if ($listType == 'PLAINLIST') {
+                    $itemId = $row3['rid'] - 1;
+                    $details = print_r($setup['id_lists']['PLAINLIST'][$itemId], 1);
+                } elseif ($listType == 'fe_users') {
+                    $details = 'fe_user uid: ' . $row3['rid'];
+                }
+
+                $mailAddress = $row3['email'] != '' ? $row3['email'] : 'leere Adresse';
+                array_push(
+                    $unsentArray,
+                    [
+                        $mailAddress,
+                        $row3['mid'],
+                        $row3['rid'],
+                        $row3['html_sent'],
+                        BackendUtility::datetime($row3['tstamp']),
+                        $row3['parsetime'],
+                        $listType,
+                        $details
+                    ]
+                );
+            }
+        }
+        $GLOBALS['TYPO3_DB']->sql_free_result($res2);
+
+        // returned
+        $returnedCounter = 0;
+        $returnedArray = [
+            [
+                'E-Mail:',
+                'mid:',
+                'rid:',
+                'html_sent:',
+                'Timestamp:',
+                'Parsetime:',
+                'Empfängerliste:',
+                'Details:',
+                'Antwort:'
+            ]
+        ];
+        $res3 = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
+            'html_sent,email,mid,rid,tstamp,parsetime,response_type,return_content',
+            'sys_dmail_maillog',
+            'mid=' . $mailingId . ' AND return_content!=\'\' AND html_sent=0',
+            'rid'
+        );
+        while (($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res3))) {
+            $returnedCounter += 1;
+            if ($row['html_sent'] == 0) {
+                $returnContent = $row['return_content'] != '' ? unserialize($row['return_content']) : ['content' => ''];
+
+                if ($listType == 'PLAINLIST') {
+                    $itemId = $row['rid'] - 1;
+                    $details = print_r($setup['id_lists']['PLAINLIST'][$itemId], 1);
+                } elseif ($listType == 'fe_users') {
+                    $details = 'fe_user uid: ' . $row['rid'];
+                }
+
+                $returnDetails = substr($returnContent['content'], 0, 250) . '...';
+
+                $mailAddress = $row['email'] != '' ? $row['email'] : 'leere Adresse';
+                array_push(
+                    $returnedArray,
+                    [
+                        $mailAddress,
+                        $row['mid'],
+                        $row['rid'],
+                        $row['html_sent'],
+                        BackendUtility::datetime($row['tstamp']),
+                        $row['parsetime'],
+                        $listType,
+                        $details,
+                        $returnDetails
+                    ]
+                );
+            }
+        }
+        $GLOBALS['TYPO3_DB']->sql_free_result($res3);
+
         // Unique responses, html
         $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery('count(*) as counter', 'sys_dmail_maillog', 'mid=' . $mailingId . ' AND response_type=1', 'rid,rtbl', 'counter');
         $uniqueHtmlResponses = $GLOBALS['TYPO3_DB']->sql_num_rows($res);
@@ -619,6 +715,15 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
 
         $output.='<br /><h2>' . $this->getLanguageService()->getLL('stats_general_information') . '</h2>';
         $output.= DirectMailUtility::formatTable($tblLines, array('nowrap', 'nowrap', 'nowrap', 'nowrap'), 1, array());
+
+        if ($unsentCounter > 0) {
+            $output .= '<script>function toggleInfo() { var x = document.getElementById("unsentInfo"); if (x.style.display === "none") { x.style.display = "block";} else {x.style.display = "none";};}</script>';
+            $output .= '<a href="#" onClick="toggleInfo()" style="float:right">🛈</a>';
+            $output .= '<div id="unsentInfo" style="display:none">';
+            $output .= '<br /><h2>Nicht gezählte:</h2> <p>Mutmasslich nicht gesendete: ' . $unsentCounter . '</p>';
+            $output .= DirectMailUtility::formatTable($unsentArray, ['nowrap', 'nowrap', 'nowrap', 'nowrap'], 1, []);
+            $output .= '</div>';
+        }
 
         // ******************
         // Links:
@@ -1342,6 +1447,11 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
                 $output .= '<br />' . $this->getLanguageService()->getLL('stats_emails_returned_reason_unknown_list') . '<br />';
                 $output .= '<textarea' . $this->doc->formWidth() . ' rows="6" name="nothing">' . LF . htmlspecialchars(implode(LF, $emails)) . '</textarea>';
             }
+        }
+
+        if ($returnedCounter > 0) {
+            $output .= '<br /><h2>Returns:</h2> <p>Zurückgekommene: ' . $returnedCounter . '</p>';
+            $output .= DirectMailUtility::formatTable($returnedArray, ['nowrap', 'nowrap', 'nowrap', 'nowrap'], 1, []);
         }
 
         /**
