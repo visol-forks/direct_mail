@@ -593,9 +593,9 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
         // unsent
         $setup = unserialize($row['query_info']);
         $unsentCounter = 0;
-        $unsentArray = [['E-Mail:', 'mid:', 'rid:', 'html_sent:', 'Timestamp:', 'Parsetime:', 'Empfängerliste:', 'Details:']];
+        $unsentArray = [['E-Mail:', 'mid:', 'rid:', 'html_sent:', '# Fehlversuche:', 'Timestamp:', 'Parsetime:', 'Empfängerliste:', 'Details:']];
         $res2 = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
-            'html_sent,email,mid,rid,tstamp,parsetime',
+            'html_sent,email,mid,rid,failed_sending_attempts,tstamp,parsetime',
             'sys_dmail_maillog',
             'mid=' . $mailingId . ' AND response_type=0 AND html_sent=0',
             'rid'
@@ -622,6 +622,7 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
                         $row3['mid'],
                         $row3['rid'],
                         $row3['html_sent'],
+                        $row3['failed_sending_attempts'],
                         BackendUtility::datetime($row3['tstamp']),
                         $row3['parsetime'],
                         $listType,
@@ -640,6 +641,7 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
                 'mid:',
                 'rid:',
                 'html_sent:',
+                '# Fehlversuche:',
                 'Timestamp:',
                 'Parsetime:',
                 'Empfängerliste:',
@@ -648,7 +650,7 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
             ]
         ];
         $res3 = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
-            'html_sent,email,mid,rid,tstamp,parsetime,response_type,return_content',
+            'html_sent,email,mid,rid,failed_sending_attempts,tstamp,parsetime,response_type,return_content',
             'sys_dmail_maillog',
             'mid=' . $mailingId . ' AND return_content!=\'\' AND html_sent=0',
             'rid'
@@ -675,6 +677,7 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
                         $row['mid'],
                         $row['rid'],
                         $row['html_sent'],
+                        $row['failed_sending_attempts'],
                         BackendUtility::datetime($row['tstamp']),
                         $row['parsetime'],
                         $listType,

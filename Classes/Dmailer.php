@@ -282,10 +282,11 @@ class Dmailer
      *
      * @param array $recipRow Recipient's data array
      * @param string $tableNameChar Tablename, from which the recipient come from
+     * @param int $logUid The ID of the log entry
      *
      * @return int Which kind of email is sent, 1 = HTML, 2 = plain, 3 = both
      */
-    public function dmailer_sendAdvanced(array $recipRow, $tableNameChar)
+    public function dmailer_sendAdvanced(array $recipRow, $tableNameChar, int $logUid)
     {
         $returnCode = 0;
         $tempRow = array();
@@ -375,7 +376,11 @@ class Dmailer
             }
 
             if ($returnCode && !empty($recipient)) {
-                $this->sendTheMail($recipient, $recipRow);
+                $mailWasSent = $this->sendTheMail($recipient, $logUid, $recipRow);
+                if (!$mailWasSent) {
+                    // Set return code to 99
+                    $returnCode = 99;
+                }
             }
         } else {
             $this->logger->warning('No e-mail for user ' . $recipRow['firstname'] . ' - ' . $recipRow['name']);
@@ -590,22 +595,47 @@ class Dmailer
     public function shipOfMail($mid, array $recipRow, $tableKey)
     {
         if (!$this->dmailer_isSend($mid, $recipRow['uid'], $tableKey)) {
+            /*
+             * In the patched version, dmail_isSend says it was not sent at all
+             * or not sent successfully. Therefore we perform an additional check
+             * to see if there is already a log entry.
+             */
+            $logEntryForRecipient = $this->dmailer_getMailLogEntryForRecipient($mid, $recipRow['uid'], $tableKey);
+
             $pt = GeneralUtility::milliseconds();
             $recipRow = self::convertFields($recipRow);
 
             // write to dmail_maillog table. if it can be written, continue with sending.
             // if not, stop the script and report error
             $rC = 0;
-            $ok = $this->dmailer_addToMailLog($mid, $tableKey . '_' . $recipRow['uid'], strlen($this->message), GeneralUtility::milliseconds() - $pt, $rC, $recipRow['email']);
 
-            $this->logger->info('Logging start of e-mail processing: ' . $recipRow['email'] . ': is log OK? ' . $ok);
+            // We check for false here because $logEntryForRecipient would be NULL
+            // in case of error
+            $logEntryWasCreated = false;
+            if ($logEntryForRecipient === false) {
+                $logEntryWasCreated = $this->dmailer_addToMailLog(
+                    $mid,
+                    $tableKey . '_' . $recipRow['uid'],
+                    strlen($this->message),
+                    GeneralUtility::milliseconds() - $pt,
+                    $rC,
+                    $recipRow['email']
+                );
+            }
 
-            if ($ok) {
-                $logUid = $GLOBALS['TYPO3_DB']->sql_insert_id();
+            if ($logEntryWasCreated || is_array($logEntryForRecipient)) {
+                $logUid = $logEntryWasCreated ? $GLOBALS['TYPO3_DB']->sql_insert_id() : $logEntryForRecipient['uid'];
 
                 $this->logger->info('Successfully logged start of e-mail processing: ' . $recipRow['email'] . ': only if OK / logUid=' . $logUid);
 
-                $rC     = $this->dmailer_sendAdvanced($recipRow, $tableKey);
+                $rC = $this->dmailer_sendAdvanced($recipRow, $tableKey, $logUid);
+
+                if ($rC === 99) {
+                    // Mailer had an error, we must not proceed
+                    $this->logger->error('Mail could not be sent due to Mailer error: ' . $recipRow['email'] . ' / logUid=' . $logUid . '. Will retry later.');
+                    return;
+                }
+
                 $parsetime = GeneralUtility::milliseconds() - $pt;
                 // Update the log with real values
                 $updateFields = array(
@@ -756,9 +786,32 @@ class Dmailer
             'rid=' . intval($rid) .
                 ' AND rtbl=' . $GLOBALS['TYPO3_DB']->fullQuoteStr($rtbl, 'sys_dmail_maillog') .
                 ' AND mid=' . intval($mid) .
-                ' AND response_type=0'
+                ' AND response_type=0' .
+                // A mail with html_sent=0 is not considered sent
+                ' AND html_sent>0'
         );
         return $GLOBALS['TYPO3_DB']->sql_num_rows($res);
+    }
+
+    /**
+     * If available, get the existing mail log entry for a recipient
+     *
+     * @param int $mailId Newsletter ID. UID of the sys_dmail record
+     * @param int $recipientId Recipient UID
+     * @param string $recipientTable Recipient table
+     *
+     * @return array|false|null
+     */
+    public function dmailer_getMailLogEntryForRecipient($mailId, $recipientId, $recipientTable)
+    {
+        return $GLOBALS['TYPO3_DB']->exec_SELECTgetSingleRow(
+            'uid',
+            'sys_dmail_maillog',
+            'rid=' . intval($recipientId) .
+                ' AND rtbl=' . $GLOBALS['TYPO3_DB']->fullQuoteStr($recipientTable, 'sys_dmail_maillog') .
+                ' AND mid=' . intval($mailId) .
+                ' AND response_type=0'
+        );
     }
 
     /**
@@ -776,8 +829,11 @@ class Dmailer
             'sys_dmail_maillog',
             'mid=' . intval($mid) .
                 ' AND rtbl=' . $GLOBALS['TYPO3_DB']->fullQuoteStr($rtbl, 'sys_dmail_maillog') .
-                ' AND response_type=0'
+                ' AND response_type=0' .
+                // A mail with html_sent=0 is not considered sent
+                ' AND html_sent>0'
         );
+
         $list = array();
         while (($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res))) {
             $list[] = $row['rid'];
@@ -1002,10 +1058,11 @@ class Dmailer
      *
      * @param	string/array	$recipient The recipient array. array($name => $mail)
      * @param   array           $recipRow  Recipient's data array
+     * @param   int           $logUid  The ID of the log entry
      *
-     * @return	void
+     * @return	boolean
      */
-    public function sendTheMail($recipient, $recipRow = null)
+    public function sendTheMail($recipient, int $logUid, $recipRow = null)
     {
         // init the swiftmailer object
         /* @var $mailer \TYPO3\CMS\Core\Mail\MailMessage */
@@ -1068,28 +1125,41 @@ class Dmailer
             $email = $recipient;
         }
 
-        $this->logger->info('E-mail will be sent to ($email): ' . $email);
-        $this->logger->info('E-mail will be sent to ($mailer->getTo): ' . array_key_first($mailer->getTo()));
+        $this->logger->info('E-mail will be sent to: ' . $email);
 
-        // TODO: do we really need the return value?
-        $sent = $mailer->send();
-        $failed = $mailer->getFailedRecipients();
+        try {
+            $sent = $mailer->send();
+            $failed = $mailer->getFailedRecipients();
 
-        $this->logger->info('According to Mailer, mail to ' . $recipRow['email'] . ' was sent to number of recipients: ' . $sent);
-        if ($failed) {
-            $this->logger->warning('According to Mailer, mail to ' . $recipRow['email'] . ' was not sent to: ' . print_r($failed, true));
-        }
-        // unset the mailer object
-        unset($mailer);
+            $this->logger->info('According to Mailer, mail to ' . $recipRow['email'] . ' was sent to number of recipients: ' . $sent);
+            if ($failed) {
+                $this->logger->warning('According to Mailer, mail to ' . $recipRow['email'] . ' was not sent to: ' . print_r($failed, true));
+            }
+            // unset the mailer object
+            unset($mailer);
 
-        // Delete temporary files
-        // see setContent, where temp images are downloaded
-        if (!empty($this->tempFileList)) {
-            foreach ($this->tempFileList as $tempFile) {
-                if (file_exists($tempFile)) {
-                    unlink($tempFile);
+            // Delete temporary files
+            // see setContent, where temp images are downloaded
+            if (!empty($this->tempFileList)) {
+                foreach ($this->tempFileList as $tempFile) {
+                    if (file_exists($tempFile)) {
+                        unlink($tempFile);
+                    }
                 }
             }
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->warning(sprintf('E-mail could not be sent to %s: %s (%s)', $email, $e->getMessage(), $e->getCode()));
+
+            // Log failed attempts
+            $GLOBALS['TYPO3_DB']->sql_query(
+                sprintf(
+                    'UPDATE sys_dmail_maillog SET failed_sending_attempts = failed_sending_attempts + 1 WHERE uid=%d',
+                    $logUid
+                )
+            );
+
+            return false;
         }
     }
 
