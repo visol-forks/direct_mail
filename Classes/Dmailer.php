@@ -824,6 +824,23 @@ class Dmailer
      */
     public function dmailer_getSentMails($mid, $rtbl)
     {
+        $numberOfLogEntriesWithMoreThan5FailedAttempts = $GLOBALS['TYPO3_DB']->exec_SELECTcountRows(
+            '*',
+            'sys_dmail_maillog',
+            'mid=' . intval($mid) .
+                ' AND rtbl=' . $GLOBALS['TYPO3_DB']->fullQuoteStr($rtbl, 'sys_dmail_maillog') .
+                ' AND response_type=0' .
+                // A mail with html_sent=0 is not considered sent
+                ' AND html_sent=0' .
+                ' AND failed_sending_attempts >= 5'
+        );
+        if ($numberOfLogEntriesWithMoreThan5FailedAttempts > 0) {
+            throw new \Exception(
+                'In this mail delivery, there is at least one recipient with 5 failed sending attempts (see Statistics module). This case cannot be handled, therefore exiting the sending process. Try cleaning up manually before sending again.',
+                1650837797
+            );
+        }
+
         $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery(
             'rid',
             'sys_dmail_maillog',
