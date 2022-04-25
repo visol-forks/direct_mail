@@ -1079,7 +1079,7 @@ class Dmailer
      *
      * @return	boolean
      */
-    public function sendTheMail($recipient, int $logUid, $recipRow = null)
+    public function sendTheMail($recipient, int $logUid = 0, $recipRow = null)
     {
         // init the swiftmailer object
         /* @var $mailer \TYPO3\CMS\Core\Mail\MailMessage */
@@ -1167,6 +1167,10 @@ class Dmailer
             return true;
         } catch (\Exception $e) {
             $this->logger->warning(sprintf('E-mail could not be sent to %s: %s (%s)', $email, $e->getMessage(), $e->getCode()));
+
+            if ($logUid === 0) {
+                return false;
+            }
 
             // Log failed attempts
             $GLOBALS['TYPO3_DB']->sql_query(
