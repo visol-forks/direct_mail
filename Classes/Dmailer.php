@@ -49,6 +49,11 @@ class Dmailer
     public $mailObject = null;
     public $testmail = false;
 
+    /**
+     * @var bool Whether there was a sending error in the current execution
+     */
+    public $hasSendingError = false;
+
     /*
      * @var string
      * Todo: need this in swift?
@@ -943,7 +948,9 @@ class Dmailer
 
             $finished = $this->dmailer_masssend_list($query_info, $row['uid']);
 
-            if ($finished) {
+            if ($finished && !$this->hasSendingError) {
+                // We only mark the mailing as finished if there were no errors
+                // If there were errors, failed recipients are retried in the next run
                 $this->dmailer_setBeginEnd($row['uid'], 'end');
             }
         } else {
@@ -1166,6 +1173,7 @@ class Dmailer
             }
             return true;
         } catch (\Exception $e) {
+            $this->hasSendingError = true;
             $this->logger->warning(sprintf('E-mail could not be sent to %s: %s (%s)', $email, $e->getMessage(), $e->getCode()));
 
             if ($logUid === 0) {
