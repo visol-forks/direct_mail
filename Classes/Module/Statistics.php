@@ -655,31 +655,31 @@ class Statistics extends \TYPO3\CMS\Backend\Module\BaseScriptClass
             'mid=' . $mailingId . ' AND return_content!=\'\' AND html_sent=0',
             'rid'
         );
-        while (($row = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res3))) {
+        while (($mailLogRow = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res3))) {
             $returnedCounter += 1;
-            if ($row['html_sent'] == 0) {
-                $returnContent = $row['return_content'] != '' ? unserialize($row['return_content']) : ['content' => ''];
+            if ($mailLogRow['html_sent'] == 0) {
+                $returnContent = $mailLogRow['return_content'] != '' ? unserialize($mailLogRow['return_content']) : ['content' => ''];
 
                 if ($listType == 'PLAINLIST') {
-                    $itemId = $row['rid'] - 1;
+                    $itemId = $mailLogRow['rid'] - 1;
                     $details = print_r($setup['id_lists']['PLAINLIST'][$itemId], 1);
                 } elseif ($listType == 'fe_users') {
-                    $details = 'fe_user uid: ' . $row['rid'];
+                    $details = 'fe_user uid: ' . $mailLogRow['rid'];
                 }
 
                 $returnDetails = substr($returnContent['content'], 0, 250) . '...';
 
-                $mailAddress = $row['email'] != '' ? $row['email'] : 'leere Adresse';
+                $mailAddress = $mailLogRow['email'] != '' ? $mailLogRow['email'] : 'leere Adresse';
                 array_push(
                     $returnedArray,
                     [
                         $mailAddress,
-                        $row['mid'],
-                        $row['rid'],
-                        $row['html_sent'],
-                        $row['failed_sending_attempts'],
-                        BackendUtility::datetime($row['tstamp']),
-                        $row['parsetime'],
+                        $mailLogRow['mid'],
+                        $mailLogRow['rid'],
+                        $mailLogRow['html_sent'],
+                        $mailLogRow['failed_sending_attempts'],
+                        BackendUtility::datetime($mailLogRow['tstamp']),
+                        $mailLogRow['parsetime'],
                         $listType,
                         $details,
                         $returnDetails
