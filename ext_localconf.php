@@ -88,4 +88,11 @@ defined('TYPO3') || die();
         "@import 'EXT:direct_mail/Configuration/TSconfig/page.tsconfig'"
     );
 
+    $GLOBALS['TYPO3_CONF_VARS']['LOG']['DirectMailTeam']['DirectMail']['Dmailer']['writerConfiguration'] = [
+        \TYPO3\CMS\Core\Log\LogLevel::INFO => [
+            \TYPO3\CMS\Core\Log\Writer\FileWriter::class => [
+                'logFile' => \TYPO3\CMS\Core\Core\Environment::getVarPath() . '/log/dmail.log',
+            ],
+        ],
+    ];
 })();

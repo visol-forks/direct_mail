@@ -239,6 +239,10 @@ class Dmailer implements LoggerAwareInterface
      */
     public function prepare(array $row): void
     {
+        $sys_dmail_uid = $row['uid'];
+
+        $this->logger->info('<-- Direct mail start sys_dmail_uid=' . $sys_dmail_uid . ' -->');
+
         if ($row['flowedFormat']) {
             $this->flowedFormat = true;
         }
@@ -392,6 +396,10 @@ class Dmailer implements LoggerAwareInterface
                 if ($this->mailHasContent) {
                     $this->theParts['html']['content'] = $this->replaceMailMarkers($tempContentHTML, $recipientRow, $additionalMarkers);
                     $returnCode |= 1;
+                    $this->logger->info('$this->mailHasContent HTML TRUE: ' . $recipientRow['email'] .' $returnCode: ' . $returnCode);
+                } else {
+                    $this->logger->warning('$this->mailHasContent HTML FALSE: no boundaryParts_html? $tableNameChar: ' . $tableNameChar . ' email: ' . $recipientRow['email'] .' $returnCode:' . $returnCode);
+                    $this->logger->info('$tempContent_HTML: ' . print_r($tempContentHTML, true));
                 }
             }
 
@@ -410,15 +418,30 @@ class Dmailer implements LoggerAwareInterface
                     }
                     $this->theParts['plain']['content'] = $tempContentPlain;
                     $returnCode |= 2;
+                    $this->logger->info('$this->mailHasContent PLAIN TRUE: ' . $recipientRow['email'] .' $returnCode: ' . $returnCode);
+                } else {
+                    $this->logger->info('$this->mailHasContent PLAIN FALSE: $tableNameChar: ' . $tableNameChar . ' email: ' . $recipientRow['email'] .' $returnCode: ' . $returnCode);
                 }
             }
 
             $this->TYPO3MID = $midRidId . '-' . md5($midRidId);
             $this->dmailer['sys_dmail_rec']['return_path'] = str_replace('###XID###', $midRidId, $this->dmailer['sys_dmail_rec']['return_path']);
 
-            if ($returnCode) {
-                $recipient = $this->createRecipient($recipientRow['email'], $this->ensureCorrectEncoding($recipientRow['name']));
+            // check if the email valids
+            $recipient = [];
+            if (GeneralUtility::validEmail($recipientRow['email'])) {
+                $email = $recipientRow['email'];
+                $name = $this->ensureCorrectEncoding($recipientRow['name']);
+
+                $recipient = $this->createRecipient($email, $name);
+            } else {
+                $this->logger->warning('E-mail invalid: ' . $recipientRow['email']);
+            }
+
+            if ($returnCode && !empty($recipient)) {
                 $this->sendTheMail($recipient, $recipientRow);
+            } else {
+                $this->logger->warning('No e-mail for user ' . $recipientRow['firstname'] . ' - ' . $recipientRow['name']);
             }
         }
 
@@ -636,6 +659,8 @@ class Dmailer implements LoggerAwareInterface
                     'size' => strlen($this->message)
                 ];
                 $ok = $sysDmailMaillogRepository->updateSysDmailMaillogForShipOfMail($values);
+
+                $this->logger->info('Logging start of e-mail processing: ' . $recipRow['email'] . ': is log OK? ' . $ok);
 
                 if ($ok === false) {
                     $message = 'Unable to update Log-Entry in table sys_dmail_maillog. Table full? Mass-Sending stopped. Delete each entries except the entries of active mailings (mid=' . $mid . ')';
@@ -917,6 +942,15 @@ class Dmailer implements LoggerAwareInterface
                 }
             }
         }
+
+        if (is_array($recipient)) {
+            $email = implode(',', $recipient);
+        } else {
+            $email = $recipient;
+        }
+
+        $this->logger->info('E-mail will be sent to ($email): ' . $email);
+        $this->logger->info('E-mail will be sent to ($mailer->getTo): ' . array_key_first($mailer->getTo()));
 
         $mailer->send();
     }
