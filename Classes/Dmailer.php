@@ -58,6 +58,11 @@ class Dmailer implements LoggerAwareInterface
     protected bool $testmail = false;
     protected string $charset = '';
 
+    /**
+     * @var bool Whether there was a sending error in the current execution
+     */
+    public $hasSendingError = false;
+
     /*
      * @var string
      * Todo: Symfony mailer does not have an encoding you can change. Check if this has side effects
@@ -819,7 +824,9 @@ class Dmailer implements LoggerAwareInterface
 
             $finished = $this->masssendList($query_info, $row['uid']);
 
-            if ($finished) {
+            if ($finished && !$this->hasSendingError) {
+                // We only mark the mailing as finished if there were no errors
+                // If there were errors, failed recipients are retried in the next run
                 $this->setBeginEnd((int)$row['uid'], 'end');
             }
         } else {
