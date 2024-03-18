@@ -435,7 +435,7 @@ class SysDmailMaillogRepository extends MainRepository {
      *
      * @return bool True on success or False on error
      */
-    public function dmailerAddToMailLog(int $mid, string $rid, int $size, int $parsetime, int $html, string $email): int
+    public function dmailerAddToMailLog(int $mid, string $rid, int $size, int $parsetime, int $html, string $email, int $attempt): int
     {
         [$rtbl, $rid] = explode('_', $rid);
 
@@ -452,6 +452,7 @@ class SysDmailMaillogRepository extends MainRepository {
                 'size' => $size,
                 'parsetime' => $parsetime,
                 'html_sent' => $html,
+                'failed_sending_attempts' => $attempt,
             ])
             ->execute();
 
@@ -502,14 +503,14 @@ class SysDmailMaillogRepository extends MainRepository {
             ->andWhere($queryBuilder->expr()->gte('failed_sending_attempts', '5'))
             ->executeQuery()
             ->fetchOne();
-        
+
         if ($numberOfLogEntriesWithMoreThan5FailedAttempts > 0) {
             throw new \Exception(
-                'In this mail delivery, there is at least one recipient with 5 failed sending attempts (see Statistics module). This case cannot be handled, therefore exiting the sending process. Try cleaning up manually before sending again.',
+                'In this mail delivery for mid ' . $mid . ' , there is at least one recipient with 5 failed sending attempts (see Statistics module). This case cannot be handled, therefore exiting the sending process. Try cleaning up manually before sending again.',
                 1650837797
             );
         }
-        
+
         $queryBuilder = $this->getQueryBuilder($this->table);
         $statement = $queryBuilder
             ->select('rid')

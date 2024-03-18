@@ -8,11 +8,11 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 class SysDmailRepository extends MainRepository {
     protected string $table = 'sys_dmail';
-    
+
     /**
      * @return array|bool
      */
-    public function selectSysDmailById(int $sys_dmail_uid, int $pid) //: array|bool 
+    public function selectSysDmailById(int $sys_dmail_uid, int $pid) //: array|bool
     {
         $queryBuilder = $this->getQueryBuilder($this->table);
         $queryBuilder
@@ -30,11 +30,11 @@ class SysDmailRepository extends MainRepository {
         ->execute()
         ->fetch();
     }
-    
+
     /**
      * @return array|bool
      */
-    public function selectSysDmailsByPid(int $pid) //: array|bool 
+    public function selectSysDmailsByPid(int $pid) //: array|bool
     {
         $queryBuilder = $this->getQueryBuilder($this->table);
         $queryBuilder
@@ -49,18 +49,18 @@ class SysDmailRepository extends MainRepository {
         ->execute()
         ->fetchAllAssociative();
     }
-    
+
     /**
-     * @return array|bool
+     * @return array|bool|null
      */
-    public function selectForPageInfo(int $id) //: array|bool 
+    public function selectForPageInfo(int $id) //: array|bool|null
     {
         $queryBuilder = $this->getQueryBuilder($this->table);
         $queryBuilder
         ->getRestrictions()
         ->removeAll()
         ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
-        
+
         return $queryBuilder->selectLiteral('sys_dmail.uid', 'sys_dmail.subject', 'sys_dmail.scheduled', 'sys_dmail.scheduled_begin', 'sys_dmail.scheduled_end', 'COUNT(sys_dmail_maillog.mid) AS count')
         ->from($this->table, $this->table)
         ->leftJoin(
@@ -73,18 +73,19 @@ class SysDmailRepository extends MainRepository {
                 ' AND sys_dmail.type IN (0,1)' .
                 ' AND sys_dmail.issent = 1'.
                 ' AND sys_dmail_maillog.response_type = 0'.
-                ' AND sys_dmail_maillog.html_sent > 0')
+                ' AND sys_dmail_maillog.html_sent > 0'.
+                ' OR sys_dmail_maillog.failed_sending_attempts > 0')
         ->groupBy('sys_dmail_maillog.mid')
         ->orderBy('sys_dmail.scheduled','DESC')
         ->addOrderBy('sys_dmail.scheduled_begin','DESC')
         ->execute()
         ->fetchAll();
     }
-    
+
     /**
      * @return array|bool
      */
-    public function selectForMkeListDMail(int $id, string $sOrder, string $ascDesc) //: array|bool 
+    public function selectForMkeListDMail(int $id, string $sOrder, string $ascDesc) //: array|bool
     {
         $queryBuilder = $this->getQueryBuilder($this->table);
         
@@ -92,7 +93,7 @@ class SysDmailRepository extends MainRepository {
         ->getRestrictions()
         ->removeAll()
         ->add(GeneralUtility::makeInstance(DeletedRestriction::class));
-        
+
         return $queryBuilder->select('uid','pid','subject','tstamp','issent','renderedsize','attachment','type')
         ->from($this->table)
         ->add('where','pid = ' . intval($id) .
@@ -120,7 +121,7 @@ class SysDmailRepository extends MainRepository {
         ->set('renderedSize', strlen($mailContent))
         ->execute();
     }
-    
+
     /**
      *
      * @param int $uid
@@ -137,7 +138,7 @@ class SysDmailRepository extends MainRepository {
         );
     }
 
-    public function selectForJumpurl(int $mailId) 
+    public function selectForJumpurl(int $mailId)
     {
         $queryBuilder = $this->getQueryBuilder($this->table);
 
@@ -164,7 +165,7 @@ class SysDmailRepository extends MainRepository {
         }
     }
 
-    public function selectForRuncron() 
+    public function selectForRuncron()
     {
         $queryBuilder = $this->getQueryBuilder($this->table);
         $queryBuilder
