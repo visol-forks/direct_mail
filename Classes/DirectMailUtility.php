@@ -105,6 +105,8 @@ class DirectMailUtility
         if (is_array($plainMails)) {
             $c = 0;
             foreach ($plainMails as $v) {
+                # strip nonbreakspace chars: https://redmine.visol.ch/issues/40752
+                $v = preg_replace('/ /','',$v);
                 $out[$c]['email'] = trim($v);
                 $out[$c]['name'] = '';
                 $c++;

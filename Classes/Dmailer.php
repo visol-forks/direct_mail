@@ -389,12 +389,12 @@ class Dmailer implements LoggerAwareInterface
                 $name = $this->ensureCorrectEncoding($recipRow['name']);
                 $recipient = $this->createRecipient($email, $name);
             } else {
-                $this->logger->warning('E-mail invalid: ' . $recipRow['email']);
+                $this->logger->warning('E-mail invalid: ' . $this->dmailer['sys_dmail_rec']['mid'] . '/' . print_r($recipRow,1) . $midRidId . ' ' . print_r($recipient,1));
             }
 
             $logEntryForRecipient = $this->dmailer_getMailLogEntryForRecipient($this->dmailer['sys_dmail_rec']['uid'], $recipRow['email'], $tableNameChar);
 
-            if ($returnCode && !empty($recipient) && $logEntryForRecipient['html_sent'] === 0 || $logEntryForRecipient === false) {
+            if ($returnCode && !empty($recipient) && $logEntryForRecipient['html_sent'] === 0 || ($logEntryForRecipient === false && !empty($recipient))) {
                 $mailWasSent = $this->sendTheMail($recipient, $recipRow, $tableNameChar);
                 $this->logger->info('sendTheMail() returns : ' . $mailWasSent);
                 if (!$mailWasSent) {
