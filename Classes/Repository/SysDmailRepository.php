@@ -73,8 +73,12 @@ class SysDmailRepository extends MainRepository {
                 ' AND sys_dmail.type IN (0,1)' .
                 ' AND sys_dmail.issent = 1'.
                 ' AND sys_dmail_maillog.response_type = 0'.
-                ' AND sys_dmail_maillog.html_sent > 0'.
-                ' OR sys_dmail_maillog.failed_sending_attempts > 0')
+                ' AND sys_dmail_maillog.html_sent > 0')
+        ->orWhere('sys_dmail.pid = ' . $id .
+            ' AND sys_dmail.type IN (0,1)' .
+            ' AND sys_dmail.issent = 1'.
+            ' AND sys_dmail_maillog.response_type = 0'.
+            ' AND sys_dmail_maillog.failed_sending_attempts > 0')
         ->groupBy('sys_dmail_maillog.mid')
         ->orderBy('sys_dmail.scheduled','DESC')
         ->addOrderBy('sys_dmail.scheduled_begin','DESC')
