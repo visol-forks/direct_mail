@@ -965,7 +965,6 @@ class Dmailer implements LoggerAwareInterface
         $queryBuilder->select('uid','mid','html_sent','email')
             ->from($tableName)
             ->where($queryBuilder->expr()->eq('email', $queryBuilder->createNamedParameter($recipientEmail, \PDO::PARAM_STR)))
-            ->andWhere($queryBuilder->expr()->eq('rtbl', $queryBuilder->createNamedParameter($recipientTable)))
             ->andWhere($queryBuilder->expr()->eq('mid', $queryBuilder->createNamedParameter((int)$mailId, \PDO::PARAM_INT)))
             ->andWhere($queryBuilder->expr()->eq('response_type', '0'))
             ->execute();
