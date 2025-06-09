@@ -397,13 +397,6 @@ class Dmailer implements LoggerAwareInterface
             if ($returnCode && !empty($recipient) && $logEntryForRecipient['html_sent'] === 0 || ($logEntryForRecipient === false && !empty($recipient))) {
                 $mailWasSent = $this->sendTheMail($recipient, $recipRow, $tableNameChar);
                 $this->logger->info('sendTheMail() returns : ' . $mailWasSent);
-                if (!$mailWasSent) {
-                    $returnCode = 0;
-                    $msg = "Mail not sent: " . $recipRow['email'] . " - " . $recipRow['name'];
-                    $msg .= print_r($recipRow,1);
-                    $msg .= print_r($logEntryForRecipient,1);
-                    $this->sendMailAlert('Mail not sent',$msg);
-                }
             }
             else {
                 // mail has no returnCode or has html_sent > 0
